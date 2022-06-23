@@ -1,0 +1,3 @@
+torch
+torchvision
+opencv-python         # cv2

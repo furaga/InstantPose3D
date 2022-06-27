@@ -5,12 +5,14 @@ import torch.nn.functional as F
 import torchvision
 from abc import ABCMeta, abstractmethod
 
-hg_layer_nums = [1, 2, 4, 7, 14, 28]
+hg_layer_nums = [4, 28]
 
-    
+
 def conv3x3(in_planes, out_planes, strd=1, padding=1, bias=False):
-    return nn.Conv2d(in_planes, out_planes, kernel_size=3,
-                     stride=strd, padding=padding, bias=bias)
+    return nn.Conv2d(
+        in_planes, out_planes, kernel_size=3, stride=strd, padding=padding, bias=bias
+    )
+
 
 class ResNetBackBone(nn.Module):
     def __init__(self, resnet_type="resnet18", pretrained=True):
@@ -94,7 +96,7 @@ class HourGlass(nn.Module):
 
     def _generate_network(self, level):
         self.add_module(
-            "b1_" + str(level), ConvBlock(self.in_ch, self.in_ch, norm=self.norm)
+            "b1_" + str(level), ConvBlock(self.in_ch, self.out_ch, norm=self.norm)
         )
         self.add_module(
             "b2_" + str(level), ConvBlock(self.in_ch, self.in_ch, norm=self.norm)
@@ -142,15 +144,14 @@ class HourGlass(nn.Module):
 class HGNet(nn.Module):
     def __init__(self, args):
         super(HGNet, self).__init__()
-        self.resnet = ResNetBackBone(resnet_type="resnet34")
-        self.opt = args
 
-        in_ch = 9
+        self.resnet = ResNetBackBone(resnet_type="resnet34")
+        self.args = args
+
+        in_ch = 256 * 3
         self.n_stack = 0
         for i, out_ch in enumerate(hg_layer_nums):
-            self.add_module(
-                f"m{i}", HourGlass(self.args.hg_depth, in_ch, out_ch, self.norm)
-            )
+            self.add_module(f"m{i}", HourGlass(self.args.hg_depth, in_ch, out_ch))
             self.add_module(
                 "al" + str(i),
                 nn.Conv2d(in_ch, out_ch, kernel_size=1, stride=1, padding=0),
@@ -164,13 +165,14 @@ class HGNet(nn.Module):
         images,
     ):
         # Bx9x448x448 -> Bx9x28x28
-        _, _, out3, _ = self.resnet.forward(images)
+        out_resnet = [
+            self.resnet.forward(images[:, 3 * i : 3 * (i + 1)])[2] for i in range(3)
+        ]
 
         # Bx9x28x28 -> Bx28x28x28
-        previous = out3
+        previous = torch.cat(out_resnet, dim=1)
         outputs = []
         for i in range(self.n_stack):
-            # TODO
             hg = self._modules["m" + str(i)](previous)
             outputs.append(hg)
             if i < self.n_stack - 1:
@@ -181,27 +183,36 @@ class HGNet(nn.Module):
         return outputs
 
 
-class PoseNet3D(nn.Module, metaclass=ABCMeta):
+class Pose3DNet(nn.Module):
     def __init__(self, args):
-        super(PoseNet3D, self).__init__()
-        self.hgnets = [HGNet(args) for _ in range(4)]
+        super(Pose3DNet, self).__init__()
+
+        for i in range(24 * 4):
+            self.add_module("m" + str(i), HGNet(args))
 
     # images: B x 9 x 448 x 448
     def forward(
         self,
         images,
     ):
-        n_stack = self.hgnets[0].n_stack
+        n_stack = len(hg_layer_nums)
 
-        # list of (list of Bx28x28x28)
-        outputs_list = [hgnet(images) for hgnet in self.hgnets]
+        outputs_list = []
+        for i in range(24 * 4):
+            outputs_list.append(self._modules["m" + str(i)](images))
 
         heatmaps = []
         offsets = []
         for i in range(n_stack):
-            heatmaps.append(outputs_list[0][i])
-            offsets.append(torch.stack(outputs_list[1:][i], dim=4))
+            heatmap_ls = [o[i] for o in outputs_list[:24]]
+            heatmaps.append(torch.stack(heatmap_ls, dim=1))
             
-        # list of Bxchx28x28
-        # list of Bxchx28x28x3
+            offsets_ls = []
+            for j in range(24):
+                of = torch.stack([o[i] for o in outputs_list[24 + 3 * j:27 + 3 * j:]], dim=4)
+                offsets_ls.append(of)
+            offsets.append(torch.stack(offsets_ls, dim=1))
+
+        # list of Bx28x28x28
+        # list of Bx28x28x28x3
         return heatmaps, offsets

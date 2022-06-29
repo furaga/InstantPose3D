@@ -106,11 +106,14 @@ def load_post_callback(dummy):
     bpy.context.scene.render.image_settings.file_format = "PNG"
 
     camera = bpy.data.objects["Camera"]
-    for i_frame in range(0, 120, 10):
+
+    num_frame = 130
+    for i_frame in range(0, num_frame, 1):
         if i_frame % 10 == 0:
             print(f"  Frame {i_frame}")
 
         bpy.context.scene.frame_set(i_frame)
+        bpy.context.view_layer.update()
 
         # PARAM
         param_path = out_root / "PARAMS" / name / f"{i_frame:05d}.txt"

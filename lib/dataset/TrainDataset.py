@@ -77,7 +77,7 @@ class TrainDataset(Dataset):
                         for j in range(n_grid):
                             for k in range(n_grid):
                                 hm[i_kp, i, j, k] = np.exp(
-                                    ((x - i) ** 2 + (y - j) ** 2 + (k - z) ** 2)
+                                    -((x - i) ** 2 + (y - j) ** 2 + (k - z) ** 2)
                                     / (2 * sigma**2)
                                 ) / (2 * np.pi * sigma**2)
                                 offset[i_kp, i, j, k, 0] = x - (i + 0.5)
@@ -97,20 +97,20 @@ class TrainDataset(Dataset):
             render_path = os.path.join(self.RENDER, subject, "%05d.jpg" % i_frame)
             render = Image.open(render_path).convert("RGB")
 
-            if self.is_train:
-                # TODo
-                # Pad images
-                # random flip
-                # random scale
-                # random translate in the pixel space
+            # if self.is_train:
+            # TODo
+            # Pad images
+            # random flip
+            # random scale
+            # random translate in the pixel space
 
-                # 色味を変える
-                render = self.aug_trans(render)
+            # 色味を変える
+            # render = self.aug_trans(render)
 
-                # # random blur
-                # if self.opt.aug_blur > 0.00001:
-                #     blur = GaussianBlur(np.random.uniform(0, self.opt.aug_blur))
-                #     render = render.filter(blur)
+            # # random blur
+            # if self.opt.aug_blur > 0.00001:
+            #     blur = GaussianBlur(np.random.uniform(0, self.opt.aug_blur))
+            #     render = render.filter(blur)
 
             renders.append(self.to_tensor(render))
 
@@ -119,7 +119,7 @@ class TrainDataset(Dataset):
 
         # hm: 24 x 28 x 28 x 28, voxel -> 存在確率
         # of: 24 x 28 x 28 x 28 x 3, voxel -> xyz方向の差分（voxel中心からどのくらいずれるか）
-        param_path = os.path.join(self.PARAMS, subject, "%05d.txt" % (1 + i_frame))
+        param_path = os.path.join(self.PARAMS, subject, "%05d.txt" % (1 + start_frame))
         hm, of = self.load_heat_maps(param_path)
 
         # hm: 24 x 28 x 28 x 28, voxel -> 存在確率

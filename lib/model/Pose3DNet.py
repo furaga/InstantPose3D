@@ -5,7 +5,7 @@ import torch.nn.functional as F
 import torchvision
 from abc import ABCMeta, abstractmethod
 
-hg_layer_nums = [4, 28]
+hg_layer_nums = [24 * 4 * 28]
 
 
 def conv3x3(in_planes, out_planes, strd=1, padding=1, bias=False):
@@ -187,8 +187,7 @@ class Pose3DNet(nn.Module):
     def __init__(self, args):
         super(Pose3DNet, self).__init__()
 
-        for i in range(24 * 4):
-            self.add_module("m" + str(i), HGNet(args))
+        self.add_module("m0", HGNet(args))
 
     # images: B x 9 x 448 x 448
     def forward(
@@ -196,23 +195,28 @@ class Pose3DNet(nn.Module):
         images,
     ):
         n_stack = len(hg_layer_nums)
+        # -> B x (24 x 4 x ch) x 28 x 28
+        outputs = self._modules["m0"](images)
 
-        outputs_list = []
-        for i in range(24 * 4):
-            outputs_list.append(self._modules["m" + str(i)](images))
+        # -> B x 24 x 4 x ch x 28 x 28
+        outputs = [
+            o.reshape(
+                (
+                    o.shape[0],
+                    24,
+                    4,
+                    -1,
+                    o.shape[2],
+                    o.shape[3],
+                )
+            )
+            for o in outputs
+        ]
+        #        outputs = [torch.transpose(o, 0, 1, 2, 3, 4, 5) for o in outputs]
+        outputs = [torch.transpose(o, 2, 3) for o in outputs]
+        outputs = [torch.transpose(o, 3, 4) for o in outputs]
+        outputs = [torch.transpose(o, 4, 5) for o in outputs]
 
-        heatmaps = []
-        offsets = []
-        for i in range(n_stack):
-            heatmap_ls = [o[i] for o in outputs_list[:24]]
-            heatmaps.append(torch.stack(heatmap_ls, dim=1))
-            
-            offsets_ls = []
-            for j in range(24):
-                of = torch.stack([o[i] for o in outputs_list[24 + 3 * j:27 + 3 * j:]], dim=4)
-                offsets_ls.append(of)
-            offsets.append(torch.stack(offsets_ls, dim=1))
-
-        # list of Bx28x28x28
-        # list of Bx28x28x28x3
+        heatmaps = [o[:, :, :, :, :, 0] for o in outputs]
+        offsets = [o[:, :, :, :, :, 1:] for o in outputs]
         return heatmaps, offsets

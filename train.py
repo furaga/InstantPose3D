@@ -37,7 +37,7 @@ def parse_args():
     parser.add_argument("--hg_depth", type=int, default=2)
     parser.add_argument("--frame_num", type=int, default=12)
     parser.add_argument("--load_size", type=int, default=448)
-    
+
     args = parser.parse_args()
     return args
 
@@ -47,7 +47,7 @@ def main():
 
     # set cuda
     cuda = torch.device("cuda:%d" % args.gpu_id)
-#    cuda = torch.device("cpu")
+    #    cuda = torch.device("cpu")
 
     # Setup network
     # https://www.youtube.com/watch?v=kKNcyTqybjA&ab_channel=%E9%9D%92%E6%9F%B3%E5%B9%B8%E5%BD%A6
@@ -105,24 +105,31 @@ def main():
             last_ch = hg_layer_nums[-1]
             for i, ch in enumerate(hg_layer_nums):
                 gt_inter_hm = torch.reshape(
-                    gt_hm_tensor, (
-                        gt_hm_tensor.shape[0], 
-                        gt_hm_tensor.shape[1], 
-                        ch, last_ch // ch, 
-                        gt_hm_tensor.shape[3], 
-                        gt_hm_tensor.shape[4])
+                    gt_hm_tensor,
+                    (
+                        hm_tensors[i].shape[0],
+                        hm_tensors[i].shape[1],
+                        -1,
+                        hm_tensors[i].shape[2],
+                        hm_tensors[i].shape[3],
+                        hm_tensors[i].shape[4],
+                    ),
                 )
-                gt_inter_hm = torch.mean(gt_inter_hm, dim=3)
+
+                gt_inter_hm = torch.mean(gt_inter_hm, dim=2)
                 loss += criterion(gt_inter_hm, hm_tensors[i])
 
                 gt_inter_of = torch.reshape(
-                    gt_offset_tensor, (
-                        gt_offset_tensor[0],
-                        gt_offset_tensor[1],
-                        ch, last_ch // ch, 
-                        gt_offset_tensor.shape[3], 
-                        gt_offset_tensor.shape[4],
-                        gt_offset_tensor.shape[5])
+                    gt_offset_tensor,
+                    (
+                        offset_tensors[i].shape[0],
+                        offset_tensors[i].shape[1],
+                        -1,
+                        offset_tensors[i].shape[2],
+                        offset_tensors[i].shape[3],
+                        offset_tensors[i].shape[4],
+                        offset_tensors[i].shape[5],
+                    ),
                 )
                 gt_inter_of = torch.mean(gt_inter_of, dim=2)
                 loss += criterion(gt_inter_of, offset_tensors[i])
@@ -133,10 +140,9 @@ def main():
             err.backward()
             optimizer.step()
 
-            if train_idx % 1 == 0: # args.freq_plot == 0:
+            if train_idx % 1 == 0:  # args.freq_plot == 0:
                 print(
-                    "Type: {0} | Epoch: {1} | {2}/{3} | Err: {4:.06f} | LR: {5:.06f}".format(
-                        args.type,
+                    "Epoch: {0} | {1}/{2} | Err: {3:.06f} | LR: {4:.06f}".format(
                         epoch,
                         train_idx,
                         len(train_data_loader),

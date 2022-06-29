@@ -22,7 +22,7 @@ def main():
 
     for i_sub in range(args.n_sub):
         for i_frame in range(args.n_frame):
-            img = np.zeros((448, 448, 3), np.uint8)
+            img = (np.random.rand(448, 448, 3) * 255).astype(np.uint8)
             out_img_path = args.out_dir / f"RENDER/{i_sub}/{i_frame:05d}.jpg"
             out_img_path.parent.mkdir(parents=True, exist_ok=True)
             cv2.imwrite(str(out_img_path), img)

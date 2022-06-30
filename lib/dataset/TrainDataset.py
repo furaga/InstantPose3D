@@ -16,8 +16,9 @@ class TrainDataset(Dataset):
     def modify_commandline_options(parser, is_train):
         return parser
 
-    def __init__(self, args, phase="train"):
+    def __init__(self, args, K, phase="train"):
         self.opt = args
+        self.K = K
 
         # Path setup
         self.root = self.opt.dataroot
@@ -61,17 +62,22 @@ class TrainDataset(Dataset):
         n_grid = 28
         sigma = 2
 
-        hm = np.zeros((24, n_grid, n_grid, n_grid))
-        offset = np.zeros((24, n_grid, n_grid, n_grid, 3))
+        hm = np.zeros((self.K, n_grid, n_grid, n_grid))
+        offset = np.zeros((self.K, n_grid, n_grid, n_grid, 3))
 
         i_kp = 0
+
+        bbox = np.array([-2, -0.8, 7]), np.array([2, 2.9, 13])
         with open(param_path) as f:
             line = f.readline()
             while line:
-                tokens = line.split(" ")
+                tokens = line.split(",")
                 if len(tokens) >= 3:
                     kp = np.array([float(v) for v in tokens[:3]])
-                    x, y, z = (1 + kp) / 2 * n_grid
+
+                    # workaround
+                    x, y, z = (kp - bbox[0]) / (bbox[1] - bbox[0]) * n_grid
+                    # print(x, y, z)
 
                     for i in range(n_grid):
                         for j in range(n_grid):
@@ -80,6 +86,7 @@ class TrainDataset(Dataset):
                                     -((x - i) ** 2 + (y - j) ** 2 + (k - z) ** 2)
                                     / (2 * sigma**2)
                                 ) / (2 * np.pi * sigma**2)
+
                                 offset[i_kp, i, j, k, 0] = x - (i + 0.5)
                                 offset[i_kp, i, j, k, 1] = y - (j + 0.5)
                                 offset[i_kp, i, j, k, 2] = z - (k + 0.5)
@@ -94,7 +101,7 @@ class TrainDataset(Dataset):
         renders = []
         for i_frame in range(start_frame, start_frame + 3):
 
-            render_path = os.path.join(self.RENDER, subject, "%05d.jpg" % i_frame)
+            render_path = os.path.join(self.RENDER, subject, "%05d.png" % i_frame)
             render = Image.open(render_path).convert("RGB")
 
             # if self.is_train:
@@ -117,13 +124,13 @@ class TrainDataset(Dataset):
         # list of (3x448x448) -> 9 x 448 x 448
         renders = torch.cat(renders, dim=0)
 
-        # hm: 24 x 28 x 28 x 28, voxel -> 存在確率
-        # of: 24 x 28 x 28 x 28 x 3, voxel -> xyz方向の差分（voxel中心からどのくらいずれるか）
+        # hm: K x 28 x 28 x 28, voxel -> 存在確率
+        # of: K x 28 x 28 x 28 x 3, voxel -> xyz方向の差分（voxel中心からどのくらいずれるか）
         param_path = os.path.join(self.PARAMS, subject, "%05d.txt" % (1 + start_frame))
         hm, of = self.load_heat_maps(param_path)
 
-        # hm: 24 x 28 x 28 x 28, voxel -> 存在確率
-        # of: 24 x 28 x 28 x 28 x 3, voxel -> xyz方向の差分（voxel中心からどのくらいずれるか）
+        # hm: K x 28 x 28 x 28, voxel -> 存在確率
+        # of: K x 28 x 28 x 28 x 3, voxel -> xyz方向の差分（voxel中心からどのくらいずれるか）
         hm = torch.Tensor(hm).float()
         of = torch.Tensor(of).float()
 

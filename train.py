@@ -9,8 +9,10 @@ import torch
 import torch.nn as nn
 from torch.utils.data import DataLoader
 from torchvision import models
-from lib.model.Pose3DNet import Pose3DNet, hg_layer_nums
+from lib.model.Pose3DNet import Pose3DNet, hg_layer_nums, K
 from lib.dataset.TrainDataset import TrainDataset
+import matplotlib.pyplot as plt
+from mpl_toolkits.mplot3d import Axes3D
 
 
 def parse_args():
@@ -19,7 +21,7 @@ def parse_args():
     parser.add_argument("--checkpoints_path", type=Path, required=True)
 
     # 学習パラメタ
-    parser.add_argument("--batch_size", type=int, default=1)
+    parser.add_argument("--batch_size", type=int, default=8)
     parser.add_argument("--serial_batches", action="store_true")
     parser.add_argument("--num_threads", type=int, default=1)
     parser.add_argument("--pin_memory", action="store_true")
@@ -35,11 +37,71 @@ def parse_args():
     # TODO: augment系
 
     parser.add_argument("--hg_depth", type=int, default=2)
-    parser.add_argument("--frame_num", type=int, default=12)
+    parser.add_argument("--frame_num", type=int, default=130)
     parser.add_argument("--load_size", type=int, default=448)
 
     args = parser.parse_args()
     return args
+
+
+def rgb_to_hex(rgb):
+    return "#{:02x}{:02x}{:02x}".format(int(rgb[0]), int(rgb[1]), int(rgb[2]))
+
+
+def plot_heatmap(heatmap):
+    fig = plt.figure()
+    ax = Axes3D(fig)
+    # set limit ax
+    ax.set_xlim3d(0, 30)
+    ax.set_ylim3d(0, 30)
+    ax.set_zlim3d(0, 30)
+
+    xs, ys, zs = [], [], []
+    colors, alpha = [], []
+
+    sizes = []
+    for i in range(heatmap.shape[0]):
+        for j in range(heatmap.shape[1]):
+            for k in range(heatmap.shape[2]):
+                if heatmap[i, j, k] < 0.02:
+                    continue
+                v = max(0, min(1, heatmap[i, j, k] * 30))
+                xs.append(i)
+                ys.append(j)
+                zs.append(k)
+                colors.append(rgb_to_hex((255 * v, 0, 255 * (1 - v))))
+                alpha.append(v)
+                sizes.append(np.exp(heatmap[i, j, k] * 200))
+
+    ax.scatter(xs, ys, zs, c=colors, alpha=alpha, s=sizes, marker="o")
+    plt.show()
+
+
+def plot_pose3d(save_path, kps):
+    fig = plt.figure()
+    ax = Axes3D(fig)
+    # set limit ax
+    ax.set_xlim3d(0, 30)
+    ax.set_ylim3d(0, 30)
+    ax.set_zlim3d(0, 30)
+
+    xs, ys, zs = kps[:, 0], kps[:, 1], kps[:, 2]
+    ax.scatter(xs, ys, zs, c="#ff0000", s=30, marker="o")
+
+    # save figure
+    plt.savefig(save_path)
+
+
+def calc_pose3d(hm, offset):
+    # max index of gt_hm_tensor_np
+    kps = []
+    for ki in range(offset.shape[0]):
+        i, j, k = np.unravel_index(np.argmax(hm[ki]), hm[ki].shape)
+        x = offset[ki, i, j, k, 0] + i + 0.5
+        y = offset[ki, i, j, k, 1] + j + 0.5
+        z = offset[ki, i, j, k, 2] + k + 0.5
+        kps.append([x, y, z])
+    return np.array(kps)
 
 
 def main():
@@ -71,7 +133,7 @@ def main():
     )
 
     # 学習データ
-    train_dataset = TrainDataset(args, phase="train")
+    train_dataset = TrainDataset(args, K, phase="train")
     train_data_loader = DataLoader(
         train_dataset,
         batch_size=args.batch_size,
@@ -93,13 +155,15 @@ def main():
             # retrieve the data
             # B x 28 x 28 x 28
             gt_hm_tensor = train_data["heatmap"].to(device=cuda)
+
             # B x 28 x 28 x 28 x 3
             gt_offset_tensor = train_data["offset"].to(device=cuda)
 
             image_tensor = train_data["img"].to(device=cuda)
+            # measure time
+            since = time.time()
             hm_tensors, offset_tensors = pose3d_net.forward(image_tensor)
-            # list of Bxchx28x28
-            # list of Bxchx28x28x3
+            print("forward time: ", time.time() - since)
 
             loss = 0
             last_ch = hg_layer_nums[-1]
@@ -159,6 +223,18 @@ def main():
                 )
                 torch.save(state_dict, out_ckpt_path)
                 print("Saved", out_ckpt_path)
+
+                # Visualize Result
+                gt_hm_tensor_np = gt_hm_tensor.detach().cpu().numpy()
+                gt_offset_tensor_np = gt_offset_tensor.detach().cpu().numpy()
+                kps = calc_pose3d(gt_hm_tensor_np[0], gt_offset_tensor_np[0])
+                plot_pose3d(f"{args.checkpoints_path}/gt_epoch_{epoch}.jpg", kps)
+
+                hm_tensors_np = hm_tensors[-1].detach().cpu().numpy()
+                offset_tensors_np = offset_tensors[-1].detach().cpu().numpy()
+                kps = calc_pose3d(hm_tensors_np[0], offset_tensors_np[0])
+                plot_pose3d(f"{args.checkpoints_path}/pred_epoch_{epoch}.jpg", kps)
+
 
 
 if __name__ == "__main__":

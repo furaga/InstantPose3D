@@ -4,12 +4,12 @@ import numpy as np
 import cv2
 import random
 
-
 def parse_args():
     parser = argparse.ArgumentParser()
     parser.add_argument("--out_dir", type=Path, required=True)
     parser.add_argument("--n_sub", type=int, default=4)
     parser.add_argument("--n_frame", type=int, default=12)
+    parser.add_argument("--n_keypoints", type=int, default=24)
 
     args = parser.parse_args()
     return args
@@ -30,7 +30,7 @@ def main():
             out_param_path = args.out_dir / f"PARAMS/{i_sub}/{i_frame:05d}.txt"
             out_param_path.parent.mkdir(parents=True, exist_ok=True)
             with open(out_param_path, "w") as f:
-                kps = [random.random() * 2 - 1 for _ in range(24 * 3)]
+                kps = [random.random() * 2 - 1 for _ in range(n_keypoints * 3)]
                 for v in np.reshape(kps, (-1, 3)):
                     f.write(f"{v[0]} {v[1]} {v[2]}\n")
 

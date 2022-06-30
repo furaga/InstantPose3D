@@ -8,13 +8,13 @@ from bpy.app.handlers import persistent
 
 # https://www.mixamo.com/
 mesh_root = Path(r"D:\workspace\InstantPose3D\avatars\mixamo")
-out_root = Path(r"D:\workspace\InstantPose3D\train_mini")
+out_root = Path(r"D:\workspace\InstantPose3D\train_mini2")
 
 n_obj = 1000
 done = False
 
 
-def get_intrinsic(scene, camdata, mode="simple"):
+def get_intrinsic(scene, camdata, mode="complete"):
     scale = scene.render.resolution_percentage / 100
     width = scene.render.resolution_x * scale  # px
     height = scene.render.resolution_y * scale  # px
@@ -138,6 +138,7 @@ def load_post_callback(dummy):
         out_img_path.parent.mkdir(exist_ok=True, parents=True)
         bpy.ops.render.render()
         bpy.data.images["Render Result"].save_render(filepath=str(out_img_path))
+        break
 
     done = True
 
@@ -159,6 +160,7 @@ def main():
         bpy.ops.wm.read_homefile(use_empty=True)
         bpy.app.handlers.load_post.append(load_post_callback)
         bpy.ops.wm.open_mainfile(filepath=str(mesh_root / "environment.blend"))
+        break
 
 
 main()

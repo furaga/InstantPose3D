@@ -5,7 +5,11 @@ import torch.nn.functional as F
 import torchvision
 from abc import ABCMeta, abstractmethod
 
-hg_layer_nums = [24 * 4 * 28]
+# TODO: TDPT(24)に合わせたいhttps://digital-standard.com/tdpt/
+K = 23  # 関節数
+
+# hg_layer_nums[i]はすべてK * 4 * 28の約数である必要がある
+hg_layer_nums = [K * 4 * 28]
 
 
 def conv3x3(in_planes, out_planes, strd=1, padding=1, bias=False):
@@ -195,15 +199,15 @@ class Pose3DNet(nn.Module):
         images,
     ):
         n_stack = len(hg_layer_nums)
-        # -> B x (24 x 4 x ch) x 28 x 28
+        # -> B x (K x 4 x ch) x 28 x 28
         outputs = self._modules["m0"](images)
 
-        # -> B x 24 x 4 x ch x 28 x 28
+        # -> B x K x 4 x ch x 28 x 28
         outputs = [
             o.reshape(
                 (
                     o.shape[0],
-                    24,
+                    K,
                     4,
                     -1,
                     o.shape[2],

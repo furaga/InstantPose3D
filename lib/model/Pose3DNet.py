@@ -1,3 +1,4 @@
+from typing import List
 import numpy as np
 import torch
 import torch.nn as nn
@@ -44,124 +45,97 @@ class ResNetBackBone(nn.Module):
         return out1, out2, out3, out4
 
 
-class ConvBlock(nn.Module):
-    def __init__(self, in_planes, out_planes, norm="batch"):
-        super(ConvBlock, self).__init__()
-        self.conv1 = conv3x3(in_planes, int(out_planes / 2))
-        self.conv2 = conv3x3(int(out_planes / 2), int(out_planes / 4))
-        self.conv3 = conv3x3(int(out_planes / 4), int(out_planes / 4))
+class ASPPConv(nn.Sequential):
+    def __init__(self, in_channels: int, out_channels: int, dilation: int) -> None:
+        modules = [
+            nn.Conv2d(
+                in_channels,
+                out_channels,
+                3,
+                padding=dilation,
+                dilation=dilation,
+                bias=False,
+            ),
+            nn.BatchNorm2d(out_channels),
+            nn.ReLU(),
+        ]
+        super().__init__(*modules)
 
-        if norm == "batch":
-            self.bn1 = nn.BatchNorm2d(in_planes)
-            self.bn2 = nn.BatchNorm2d(int(out_planes / 2))
-            self.bn3 = nn.BatchNorm2d(int(out_planes / 4))
-            self.bn4 = nn.BatchNorm2d(in_planes)
-        elif norm == "group":
-            self.bn1 = nn.GroupNorm(32, in_planes)
-            self.bn2 = nn.GroupNorm(32, int(out_planes / 2))
-            self.bn3 = nn.GroupNorm(32, int(out_planes / 4))
-            self.bn4 = nn.GroupNorm(32, in_planes)
 
-        if in_planes != out_planes:
-            self.downsample = nn.Sequential(
-                self.bn4,
-                nn.ReLU(True),
-                nn.Conv2d(in_planes, out_planes, kernel_size=1, stride=1, bias=False),
+class ASPPPooling(nn.Sequential):
+    def __init__(self, in_channels: int, out_channels: int) -> None:
+        super().__init__(
+            nn.AdaptiveAvgPool2d(1),
+            nn.Conv2d(in_channels, out_channels, 1, bias=False),
+            nn.BatchNorm2d(out_channels),
+            nn.ReLU(),
+        )
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        size = x.shape[-2:]
+        for mod in self:
+            x = mod(x)
+        return F.interpolate(x, size=size, mode="bilinear", align_corners=False)
+
+
+class ASPP(nn.Module):
+    def __init__(
+        self, in_channels: int, atrous_rates: List[int], out_channels: int = 256
+    ) -> None:
+        super().__init__()
+        modules = []
+        modules.append(
+            nn.Sequential(
+                nn.Conv2d(in_channels, out_channels, 1, bias=False),
+                nn.BatchNorm2d(out_channels),
+                nn.ReLU(),
             )
-        else:
-            self.downsample = None
-
-    def forward(self, x):
-        residual = x
-
-        out1 = self.conv1(F.relu(self.bn1(x), True))
-        out2 = self.conv2(F.relu(self.bn2(out1), True))
-        out3 = self.conv3(F.relu(self.bn3(out2), True))
-
-        out3 = torch.cat([out1, out2, out3], 1)
-
-        if self.downsample is not None:
-            residual = self.downsample(residual)
-
-        out3 += residual
-
-        return out3
-
-
-class HourGlass(nn.Module):
-    def __init__(self, depth, in_ch, out_ch, norm="batch"):
-        super(HourGlass, self).__init__()
-        self.depth = depth
-        self.in_ch = in_ch
-        self.out_ch = out_ch
-        self.norm = norm
-
-        self._generate_network(self.depth)
-
-    def _generate_network(self, level):
-        self.add_module(
-            "b1_" + str(level), ConvBlock(self.in_ch, self.out_ch, norm=self.norm)
-        )
-        self.add_module(
-            "b2_" + str(level), ConvBlock(self.in_ch, self.in_ch, norm=self.norm)
         )
 
-        if level > 1:
-            self._generate_network(level - 1)
-        else:
-            self.add_module(
-                "b2_plus_" + str(level),
-                ConvBlock(self.in_ch, self.out_ch, norm=self.norm),
-            )
+        rates = tuple(atrous_rates)
+        for rate in rates:
+            modules.append(ASPPConv(in_channels, out_channels, rate))
 
-        self.add_module(
-            "b3_" + str(level), ConvBlock(self.out_ch, self.out_ch, norm=self.norm)
+        modules.append(ASPPPooling(in_channels, out_channels))
+
+        self.convs = nn.ModuleList(modules)
+
+        self.project = nn.Sequential(
+            nn.Conv2d(len(self.convs) * out_channels, out_channels, 1, bias=False),
+            nn.BatchNorm2d(out_channels),
+            nn.ReLU(),
+            nn.Dropout(0.5),
         )
 
-    def _forward(self, level, inp):
-        # upper branch
-        up1 = inp
-        up1 = self._modules["b1_" + str(level)](up1)
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        _res = []
+        for conv in self.convs:
+            _res.append(conv(x))
+        res = torch.cat(_res, dim=1)
+        return self.project(res)
 
-        # lower branch
-        low1 = F.avg_pool2d(inp, 2, stride=2)
-        low1 = self._modules["b2_" + str(level)](low1)
 
-        if level > 1:
-            low2 = self._forward(level - 1, low1)
-        else:
-            low2 = low1
-            low2 = self._modules["b2_plus_" + str(level)](low2)
-
-        low3 = low2
-        low3 = self._modules["b3_" + str(level)](low3)
-
-        up2 = F.interpolate(low3, scale_factor=2, mode="bicubic", align_corners=True)
-        # up2 = F.interpolate(low3, scale_factor=2, mode='bilinear')
-
-        return up1 + up2
-
-    def forward(self, x):
-        return self._forward(self.depth, x)
+# https://github.com/pytorch/vision/blob/87cde716b7f108f3db7b86047596ebfad1b88380/torchvision/models/segmentation/deeplabv3.py#L13
+class DeepLabHead(nn.Sequential):
+    def __init__(self, in_channels: int, num_classes: int) -> None:
+        super().__init__(
+            #            ASPP(in_channels, [12, 24, 36]),
+            ASPP(in_channels, [1, 2, 4]),  # 適当
+            nn.Conv2d(256, 256, 3, padding=1, bias=False),
+            nn.BatchNorm2d(256),
+            nn.ReLU(),
+            nn.Conv2d(256, num_classes, 1),
+        )
 
 
 class HGNet(nn.Module):
     def __init__(self, args):
         super(HGNet, self).__init__()
-
-        self.resnet = ResNetBackBone(resnet_type="resnet34")
         self.args = args
-
-        in_ch = 256 * 3
-        self.n_stack = 0
-        for i, out_ch in enumerate(hg_layer_nums):
-            self.add_module(f"m{i}", HourGlass(self.args.hg_depth, in_ch, out_ch))
-            self.add_module(
-                "al" + str(i),
-                nn.Conv2d(in_ch, out_ch, kernel_size=1, stride=1, padding=0),
-            )
-            in_ch = out_ch
-            self.n_stack += 1
+        self.backbone = ResNetBackBone(
+            resnet_type="resnet34", pretrained=args.pretrained_path is None
+        )
+        self.model = DeepLabHead(3 * 256, K * 28 * 4)
 
     # images: B x 9 x 448 x 448
     def forward(
@@ -169,58 +143,51 @@ class HGNet(nn.Module):
         images,
     ):
         # Bx9x448x448 -> Bx9x28x28
-        out_resnet = [
-            self.resnet.forward(images[:, 3 * i : 3 * (i + 1)])[2] for i in range(3)
+        xs = [
+            self.backbone.forward(images[:, 3 * i : 3 * (i + 1)])[2] for i in range(3)
         ]
+        x = torch.cat(xs, dim=1)
 
-        # Bx9x28x28 -> Bx28x28x28
-        previous = torch.cat(out_resnet, dim=1)
-        outputs = []
-        for i in range(self.n_stack):
-            hg = self._modules["m" + str(i)](previous)
-            outputs.append(hg)
-            if i < self.n_stack - 1:
-                previous = self._modules["al" + str(i)](previous)
-                previous = previous + hg
-
-        # list of Bx28x28x28
+        # Bx(Kx28x4)x28x28
+        outputs = self.model(x)
         return outputs
 
 
 class Pose3DNet(nn.Module):
-    def __init__(self, args):
+    def __init__(self, args, is_train=True):
         super(Pose3DNet, self).__init__()
+        self.hgnet = HGNet(args)
+        self.is_train = is_train
 
-        self.add_module("m0", HGNet(args))
-
-    # images: B x 9 x 448 x 448
+    # images: 3 images of B x 3 x 448 x 448
     def forward(
         self,
         images,
     ):
-        n_stack = len(hg_layer_nums)
-        # -> B x (K x 4 x ch) x 28 x 28
-        outputs = self._modules["m0"](images)
+        outputs = self.hgnet(images)
 
-        # -> B x K x 4 x ch x 28 x 28
-        outputs = [
-            o.reshape(
-                (
-                    o.shape[0],
-                    K,
-                    4,
-                    -1,
-                    o.shape[2],
-                    o.shape[3],
-                )
+        # Bx(Kx28x4)x28x28 -> BxKx28x28x28x4
+        outputs = outputs.reshape(
+            (
+                outputs.shape[0],
+                K,
+                4,
+                28,
+                outputs.shape[2],
+                outputs.shape[3],
             )
-            for o in outputs
-        ]
-        #        outputs = [torch.transpose(o, 0, 1, 2, 3, 4, 5) for o in outputs]
-        outputs = [torch.transpose(o, 2, 3) for o in outputs]
-        outputs = [torch.transpose(o, 3, 4) for o in outputs]
-        outputs = [torch.transpose(o, 4, 5) for o in outputs]
+        )
+        outputs = torch.transpose(outputs, 2, 3)
+        outputs = torch.transpose(outputs, 3, 4)
+        outputs = torch.transpose(outputs, 4, 5)
 
-        heatmaps = [o[:, :, :, :, :, 0] for o in outputs]
-        offsets = [o[:, :, :, :, :, 1:] for o in outputs]
+        # BxKx28x28x28 (binary classification)
+        heatmaps = outputs[:, :, :, :, :, 0]
+        if not self.is_train:
+            # 訓練時はBCEWithLogitsLossを使う場合のでsigmoidに通さなくて良い？
+            heatmaps = torch.sigmoid(heatmaps)
+
+        # BxKx28x28x28x3 (regression)
+        offsets = outputs[:, :, :, :, :, 1:]
+
         return heatmaps, offsets

@@ -126,7 +126,8 @@ def main():
     args.checkpoints_path.mkdir(exist_ok=True, parents=True)
 
     # 学習パラメタ: TODO
-    criterion = torch.nn.MSELoss()
+    hm_criterion = torch.nn.BCEWithLogitsLoss()
+    of_criterion = torch.nn.MSELoss()
     lr = args.learning_rate
     optimizer = torch.optim.RMSprop(
         pose3d_net.parameters(), lr=args.learning_rate, momentum=0, weight_decay=0
@@ -149,6 +150,7 @@ def main():
 
     # training
     start_epoch = 0
+    train_start_time = time.time()
     for epoch in range(start_epoch, args.num_epoch):
         set_train()
         for train_idx, train_data in enumerate(train_data_loader):
@@ -160,60 +162,33 @@ def main():
             gt_offset_tensor = train_data["offset"].to(device=cuda)
 
             image_tensor = train_data["img"].to(device=cuda)
-            # measure time
+
             since = time.time()
             hm_tensors, offset_tensors = pose3d_net.forward(image_tensor)
             print("forward time: ", time.time() - since)
+            
+            # check if hm_tensors in [0, 1]
+            hm = hm_tensors.detach().cpu().numpy()
+            print(np.min(hm), np.max(hm), np.mean(hm))
 
-            loss = 0
-            last_ch = hg_layer_nums[-1]
-            for i, ch in enumerate(hg_layer_nums):
-                gt_inter_hm = torch.reshape(
-                    gt_hm_tensor,
-                    (
-                        hm_tensors[i].shape[0],
-                        hm_tensors[i].shape[1],
-                        -1,
-                        hm_tensors[i].shape[2],
-                        hm_tensors[i].shape[3],
-                        hm_tensors[i].shape[4],
-                    ),
-                )
+            hm_loss = 4 * hm_criterion(gt_hm_tensor, hm_tensors)
+            weight = gt_hm_tensor[:, :, :, :, :, None].expand_as(gt_offset_tensor)
+            of_loss = of_criterion(
+                gt_offset_tensor * weight,
+                offset_tensors * weight,
+            )
 
-                gt_inter_hm = torch.mean(gt_inter_hm, dim=2)
-                loss += criterion(gt_inter_hm, hm_tensors[i])
-
-                gt_inter_of = torch.reshape(
-                    gt_offset_tensor,
-                    (
-                        offset_tensors[i].shape[0],
-                        offset_tensors[i].shape[1],
-                        -1,
-                        offset_tensors[i].shape[2],
-                        offset_tensors[i].shape[3],
-                        offset_tensors[i].shape[4],
-                        offset_tensors[i].shape[5],
-                    ),
-                )
-                gt_inter_of = torch.mean(gt_inter_of, dim=2)
-                loss += criterion(gt_inter_of, offset_tensors[i])
-
-            err = loss
+            loss = hm_loss + of_loss
 
             optimizer.zero_grad()
-            err.backward()
+            loss.backward()
             optimizer.step()
 
-            if train_idx % 1 == 0:  # args.freq_plot == 0:
-                print(
-                    "Epoch: {0} | {1}/{2} | Err: {3:.06f} | LR: {4:.06f}".format(
-                        epoch,
-                        train_idx,
-                        len(train_data_loader),
-                        err.item(),
-                        lr,
-                    )
-                )
+            if train_idx % 1 == 0:
+                message = f"Epoch: {epoch} | {train_idx}/{len(train_data_loader)} | "
+                message += f"Loss: {loss.item()} | Heatmap Loss: {hm_loss.item()} | Offset Loss: {of_loss.item()} | "
+                message += f"LR: {lr} | Elapsed {time.time() - train_start_time:.1f}"
+                print(message)
 
             if train_idx == len(train_data_loader) - 1:
                 state_dict = pose3d_net.state_dict()
@@ -234,7 +209,6 @@ def main():
                 offset_tensors_np = offset_tensors[-1].detach().cpu().numpy()
                 kps = calc_pose3d(hm_tensors_np[0], offset_tensors_np[0])
                 plot_pose3d(f"{args.checkpoints_path}/pred_epoch_{epoch}.jpg", kps)
-
 
 
 if __name__ == "__main__":

@@ -10,9 +10,10 @@ from bpy.app.handlers import persistent
 mesh_root = Path(r"D:\workspace\InstantPose3D\avatars\mixamo")
 out_root = Path(r"D:\workspace\InstantPose3D\train_mini2")
 
-n_obj = 1000
 done = False
 
+n_obj = 1000
+num_frame = 130
 
 def get_intrinsic(scene, camdata, mode="complete"):
     scale = scene.render.resolution_percentage / 100
@@ -84,6 +85,35 @@ def euler_to_str(e):
     return matrix_to_str([[e.x, e.y, e.z]])
 
 
+def resize_height(amt, mesh, target_height):
+    mat = mesh.matrix_world
+    positions = np.array([mat @ v.co for v in mesh.data.vertices])
+    max_pos = np.max(positions, axis=0)
+    min_pos = np.min(positions, axis=0)
+    height = (max_pos - min_pos)[2]
+    scale = target_height / height
+
+    amt.scale = (amt.scale[0] * scale, amt.scale[1] * scale, amt.scale[2] * scale)
+    print("scale", scale)
+
+
+def get_children(parent):
+    children = []
+    for ob in bpy.data.objects:
+        if ob.parent == parent:
+            children.append(ob)
+    return children
+
+
+def join_meshes(meshes):
+    bpy.ops.object.select_all(action="DESELECT")
+    bpy.context.view_layer.objects.active = meshes[0]
+    for mesh in meshes:
+        mesh.select_set(True)
+    bpy.ops.object.join()
+    return meshes[0]
+
+
 @persistent
 def load_post_callback(dummy):
     global done
@@ -96,18 +126,29 @@ def load_post_callback(dummy):
             vl.use_pass_normal = True
         scene.render.resolution_x = 448
         scene.render.resolution_y = 448
-        scene.render.film_transparent = True
         scene.render.resolution_percentage = 100
         scene.cycles.progressive = "BRANCHED_PATH"
 
     name = fbx_path.stem
     amt = bpy.data.objects["Armature"]
 
-    bpy.context.scene.render.image_settings.file_format = "PNG"
+    # join meshes
+    bpy.ops.object.select_all(action="DESELECT")
+    bpy.context.view_layer.objects.active = amt
+    amt.select_set(True)
+    bpy.ops.object.select_grouped(extend=True, type="CHILDREN_RECURSIVE")
+    meshes = get_children(amt)
+    mesh = join_meshes(meshes)
+
+    # モデルのサイズを同じくらいに調整
+    bpy.context.scene.frame_set(0)
+    resize_height(amt, mesh, 1.6)
+    
+    # JPEG
+    bpy.context.scene.render.image_settings.file_format = "JPEG"
 
     camera = bpy.data.objects["Camera"]
 
-    num_frame = 130
     for i_frame in range(0, num_frame, 1):
         if i_frame % 10 == 0:
             print(f"  Frame {i_frame}")
@@ -116,7 +157,7 @@ def load_post_callback(dummy):
         bpy.context.view_layer.update()
 
         # PARAM
-        param_path = out_root / "PARAMS" / name / f"{i_frame:05d}.txt"
+        param_path = out_root / "PARAMS_RAW" / name / f"{i_frame:05d}.txt"
         param_path.parent.mkdir(exist_ok=True, parents=True)
 
         with open(param_path, "w") as f:
@@ -134,11 +175,10 @@ def load_post_callback(dummy):
                 f.write(f"{b.name},tail,{tail_pos.x},{tail_pos.y},{tail_pos.z}\n")
 
         # RENDER
-        out_img_path = out_root / "RENDER" / name / f"{i_frame:05d}.png"
+        out_img_path = out_root / "RENDER" / name / f"{i_frame:05d}.jpg"
         out_img_path.parent.mkdir(exist_ok=True, parents=True)
         bpy.ops.render.render()
         bpy.data.images["Render Result"].save_render(filepath=str(out_img_path))
-        break
 
     done = True
 
@@ -160,7 +200,6 @@ def main():
         bpy.ops.wm.read_homefile(use_empty=True)
         bpy.app.handlers.load_post.append(load_post_callback)
         bpy.ops.wm.open_mainfile(filepath=str(mesh_root / "environment.blend"))
-        break
 
 
 main()

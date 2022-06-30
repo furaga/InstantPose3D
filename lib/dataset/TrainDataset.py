@@ -67,7 +67,9 @@ class TrainDataset(Dataset):
 
         i_kp = 0
 
-        bbox = np.array([-2, -0.8, 7]), np.array([2, 2.9, 13])
+        bbox = np.array([-1.3, 0, 4.3]), np.array([1.3, 2, 7.5])
+
+        R = 2
         with open(param_path) as f:
             line = f.readline()
             while line:
@@ -79,17 +81,19 @@ class TrainDataset(Dataset):
                     x, y, z = (kp - bbox[0]) / (bbox[1] - bbox[0]) * n_grid
                     # print(x, y, z)
 
+                    # CHWの順にしたい
                     for i in range(n_grid):
                         for j in range(n_grid):
                             for k in range(n_grid):
-                                hm[i_kp, i, j, k] = np.exp(
-                                    -((x - i) ** 2 + (y - j) ** 2 + (k - z) ** 2)
-                                    / (2 * sigma**2)
-                                ) / (2 * np.pi * sigma**2)
+                                dz = z - (i + 0.5)
+                                dy = y - (j + 0.5)
+                                dx = x - (k + 0.5)
+                                dist = np.sqrt(dx ** 2 + dy ** 2 + dz ** 2)
 
-                                offset[i_kp, i, j, k, 0] = x - (i + 0.5)
-                                offset[i_kp, i, j, k, 1] = y - (j + 0.5)
-                                offset[i_kp, i, j, k, 2] = z - (k + 0.5)
+                                hm[i_kp, i, j, k] = 1 if dist <= R else 0
+                                offset[i_kp, i, j, k, 0] = dz
+                                offset[i_kp, i, j, k, 1] = dy
+                                offset[i_kp, i, j, k, 2] = dz
 
                     i_kp += 1
                 line = f.readline()
@@ -101,7 +105,7 @@ class TrainDataset(Dataset):
         renders = []
         for i_frame in range(start_frame, start_frame + 3):
 
-            render_path = os.path.join(self.RENDER, subject, "%05d.png" % i_frame)
+            render_path = os.path.join(self.RENDER, subject, "%05d.jpg" % i_frame)
             render = Image.open(render_path).convert("RGB")
 
             # if self.is_train:

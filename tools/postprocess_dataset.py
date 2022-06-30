@@ -54,11 +54,11 @@ def load_param(param_path):
                 extrinsic = np.array([float(t) for t in tokens[3 : 3 + 16]]).reshape(
                     4, 4
                 )
-            if tokens[0] == "extrinsic_euler":
+            elif tokens[0] == "extrinsic_euler":
                 extrinsic_euler = np.array([float(t) for t in tokens[3 : 3 + 3]])
             elif tokens[0] == "intrinsic":
                 mtx = np.array([float(t) for t in tokens[3 : 3 + 9]]).reshape(3, 3)
-            elif tokens[0].startswith("mixamo"):
+            else:
                 R = scipy.spatial.transform.Rotation.from_euler(
                     "xzy", extrinsic_euler
                 ).as_matrix()
@@ -69,14 +69,17 @@ def load_param(param_path):
                 pose[:3, 3] = p.ravel()
 
                 bone_name = tokens[0]
+                if ':' in bone_name:
+                    bone_name = bone_name.split(":")[1]
+
                 head_tail = tokens[1]
                 pt = np.array([float(t) for t in tokens[2 : 3 + 3]])
                 for ti, target in enumerate(target_bone_names):
-                    if target == bone_name.split(":")[1] and head_tail == "head":
+                    if target == bone_name and head_tail == "head":
                         params[target] = (pt, pose, mtx)
 
     # check if params is len(target_bone_names)
-    assert len(params) == len(target_bone_names), len(params)
+    assert len(params) == len(target_bone_names), str(param_path)
 
     return params
 
@@ -107,7 +110,7 @@ def save_param(param_path, params):
 
 def main(args):
     # glob and convert to list
-    all_img_paths = list(args.root_dir.glob("RENDER/*/*.png"))
+    all_img_paths = list(args.root_dir.glob("RENDER/*/*.jpg"))
     
     bbox = np.array([np.inf, np.inf, np.inf]), np.array([-np.inf, -np.inf, -np.inf])
 

@@ -21,7 +21,7 @@ def parse_args():
     parser.add_argument("--checkpoints_path", type=Path, required=True)
 
     # 学習パラメタ
-    parser.add_argument("--batch_size", type=int, default=8)
+    parser.add_argument("--batch_size", type=int, default=16)
     parser.add_argument("--serial_batches", action="store_true")
     parser.add_argument("--num_threads", type=int, default=1)
     parser.add_argument("--pin_memory", action="store_true")
@@ -169,7 +169,6 @@ def main():
             
             # check if hm_tensors in [0, 1]
             hm = hm_tensors.detach().cpu().numpy()
-            print(np.min(hm), np.max(hm), np.mean(hm))
 
             hm_loss = 4 * hm_criterion(gt_hm_tensor, hm_tensors)
             weight = gt_hm_tensor[:, :, :, :, :, None].expand_as(gt_offset_tensor)
@@ -205,8 +204,8 @@ def main():
                 kps = calc_pose3d(gt_hm_tensor_np[0], gt_offset_tensor_np[0])
                 plot_pose3d(f"{args.checkpoints_path}/gt_epoch_{epoch}.jpg", kps)
 
-                hm_tensors_np = hm_tensors[-1].detach().cpu().numpy()
-                offset_tensors_np = offset_tensors[-1].detach().cpu().numpy()
+                hm_tensors_np = hm_tensors.detach().cpu().numpy()
+                offset_tensors_np = offset_tensors.detach().cpu().numpy()
                 kps = calc_pose3d(hm_tensors_np[0], offset_tensors_np[0])
                 plot_pose3d(f"{args.checkpoints_path}/pred_epoch_{epoch}.jpg", kps)
 

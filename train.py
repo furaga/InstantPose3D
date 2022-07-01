@@ -173,8 +173,8 @@ def main():
             hm_loss = 4 * hm_criterion(gt_hm_tensor, hm_tensors)
             weight = gt_hm_tensor[:, :, :, :, :, None].expand_as(gt_offset_tensor)
             of_loss = of_criterion(
-                gt_offset_tensor * weight,
-                offset_tensors * weight,
+                torch.masked_select(gt_offset_tensor, weight > 0.5),
+                torch.masked_select(offset_tensors, weight > 0.5),
             )
 
             loss = hm_loss + of_loss

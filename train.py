@@ -170,7 +170,7 @@ def main():
             # check if hm_tensors in [0, 1]
             hm = hm_tensors.detach().cpu().numpy()
 
-            hm_loss = 4 * hm_criterion(gt_hm_tensor, hm_tensors)
+            hm_loss = 4 * hm_criterion(hm_tensors, gt_hm_tensor) # gtをあとにしないといけない
             weight = gt_hm_tensor[:, :, :, :, :, None].expand_as(gt_offset_tensor)
             of_loss = of_criterion(
                 torch.masked_select(gt_offset_tensor, weight > 0.5),

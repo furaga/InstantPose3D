@@ -32,11 +32,9 @@ def parse_args():
     # データセット・モデル
     parser.add_argument("--dataroot", type=Path, required=True)
     parser.add_argument("--input_size", type=int, default=448)
-    parser.add_argument("--output_size", type=int, default=228)
 
     # TODO: augment系
 
-    parser.add_argument("--hg_depth", type=int, default=2)
     parser.add_argument("--frame_num", type=int, default=130)
     parser.add_argument("--load_size", type=int, default=448)
 
@@ -173,8 +171,8 @@ def main():
             hm_loss = 4 * hm_criterion(hm_tensors, gt_hm_tensor) # gtをあとにしないといけない
             weight = gt_hm_tensor[:, :, :, :, :, None].expand_as(gt_offset_tensor)
             of_loss = of_criterion(
-                torch.masked_select(gt_offset_tensor, weight > 0.5),
                 torch.masked_select(offset_tensors, weight > 0.5),
+                torch.masked_select(gt_offset_tensor, weight > 0.5),
             )
 
             loss = hm_loss + of_loss

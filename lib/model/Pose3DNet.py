@@ -159,7 +159,7 @@ class Pose3DNet(nn.Module):
         self.hgnet = HGNet(args)
         self.is_train = is_train
 
-    # images: 3 images of B x 3 x 448 x 448
+    # images: B x 9 x 448 x 448
     def forward(
         self,
         images,

@@ -69,7 +69,7 @@ class TrainDataset(Dataset):
 
         bbox = np.array([-1.3, 0, 4.3]), np.array([1.3, 2, 7.5])
 
-        R = 2
+        R = 4
         with open(param_path) as f:
             line = f.readline()
             while line:

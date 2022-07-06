@@ -1,10 +1,10 @@
 # NOTE: blneder2.93のGUI上で実行すること
-import numpy as np
 from pathlib import Path
 
 import bpy
-from mathutils import Matrix
+import numpy as np
 from bpy.app.handlers import persistent
+from mathutils import Matrix
 
 # https://www.mixamo.com/
 mesh_root = Path(r"D:\workspace\InstantPose3D\avatars\mixamo")

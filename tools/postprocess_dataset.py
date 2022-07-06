@@ -1,10 +1,10 @@
 import argparse
 from pathlib import Path
 from re import sub
-import numpy as np
-import cv2
-import scipy.spatial.transform
 
+import cv2
+import numpy as np
+import scipy.spatial.transform
 
 target_bone_names = [
     "Hips",

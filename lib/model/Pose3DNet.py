@@ -1,10 +1,11 @@
+from abc import ABCMeta, abstractmethod
 from typing import List
+
 import numpy as np
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import torchvision
-from abc import ABCMeta, abstractmethod
 
 # TODO: TDPT(24)に合わせたいhttps://digital-standard.com/tdpt/
 K = 23  # 関節数

@@ -1,8 +1,10 @@
 import argparse
-from pathlib import Path
-import numpy as np
-import cv2
 import random
+from pathlib import Path
+
+import cv2
+import numpy as np
+
 
 def parse_args():
     parser = argparse.ArgumentParser()

@@ -1,18 +1,20 @@
-import sys
-import os
 import argparse
-from pathlib import Path
-import numpy as np
-import cv2
+import os
+import sys
 import time
+from pathlib import Path
+
+import cv2
+import matplotlib.pyplot as plt
+import numpy as np
 import torch
 import torch.nn as nn
+from mpl_toolkits.mplot3d import Axes3D
 from torch.utils.data import DataLoader
 from torchvision import models
-from lib.model.Pose3DNet import Pose3DNet, hg_layer_nums, K
+
 from lib.dataset.TrainDataset import TrainDataset
-import matplotlib.pyplot as plt
-from mpl_toolkits.mplot3d import Axes3D
+from lib.model.Pose3DNet import K, Pose3DNet, hg_layer_nums
 
 
 def parse_args():

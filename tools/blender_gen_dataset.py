@@ -7,13 +7,14 @@ from bpy.app.handlers import persistent
 from mathutils import Matrix
 
 # https://www.mixamo.com/
-mesh_root = Path(r"D:\workspace\InstantPose3D\avatars\mixamo")
+mesh_root = Path(r"D:\workspace\InstantPose3D\avatars\mixamo\characters")
+motion_root = Path(r"D:\workspace\InstantPose3D\avatars\mixamo\motions")
 out_root = Path(r"D:\workspace\InstantPose3D\train_mini2")
 
 done = False
 
-n_obj = 1000
-num_frame = 130
+num_frame = 5000
+
 
 def get_intrinsic(scene, camdata, mode="complete"):
     scale = scene.render.resolution_percentage / 100
@@ -118,7 +119,14 @@ def join_meshes(meshes):
 def load_post_callback(dummy):
     global done
     bpy.ops.import_scene.fbx(filepath=str(fbx_path))
+    bpy.ops.import_scene.fbx(filepath=str(motion_path))
     bpy.app.handlers.load_post.remove(load_post_callback)
+
+    # アニメーションをリターゲット
+    bpy.context.view_layer.objects.active = bpy.data.objects["Armature"]
+    bpy.context.scene.mix_source_armature = bpy.data.objects["Armature.001"]
+    bpy.ops.mr.make_rig()
+    bpy.ops.mr.import_anim_to_rig()
 
     for scene in bpy.data.scenes:
         scene.render.engine = "CYCLES"
@@ -126,10 +134,11 @@ def load_post_callback(dummy):
             vl.use_pass_normal = True
         scene.render.resolution_x = 448
         scene.render.resolution_y = 448
+        scene.render.film_transparent = True
         scene.render.resolution_percentage = 100
         scene.cycles.progressive = "BRANCHED_PATH"
 
-    name = fbx_path.stem
+    name = fbx_path.stem + "_" + motion_path.stem
     amt = bpy.data.objects["Armature"]
 
     # join meshes
@@ -143,12 +152,14 @@ def load_post_callback(dummy):
     # モデルのサイズを同じくらいに調整
     bpy.context.scene.frame_set(0)
     resize_height(amt, mesh, 1.6)
-    
+
     # JPEG
-    bpy.context.scene.render.image_settings.file_format = "JPEG"
+    # bpy.context.scene.render.image_settings.file_format = "JPEG"
+    bpy.context.scene.render.image_settings.file_format = "PNG"
 
     camera = bpy.data.objects["Camera"]
 
+    kps_hist = []
     for i_frame in range(0, num_frame, 1):
         if i_frame % 10 == 0:
             print(f"  Frame {i_frame}")
@@ -160,6 +171,7 @@ def load_post_callback(dummy):
         param_path = out_root / "PARAMS_RAW" / name / f"{i_frame:05d}.txt"
         param_path.parent.mkdir(exist_ok=True, parents=True)
 
+        kps = []
         with open(param_path, "w") as f:
             extrinsic = camera.matrix_world
             intrinsic = get_intrinsic(
@@ -173,33 +185,42 @@ def load_post_callback(dummy):
                 tail_pos = amt.matrix_world @ b.tail
                 f.write(f"{b.name},head,{head_pos.x},{head_pos.y},{head_pos.z}\n")
                 f.write(f"{b.name},tail,{tail_pos.x},{tail_pos.y},{tail_pos.z}\n")
+                kps.append([head_pos.x, head_pos.y, head_pos.z])
+                kps.append([tail_pos.x, tail_pos.y, tail_pos.z])
+        kps = np.array(kps)
+        kps_hist.append(kps)
 
         # RENDER
-        out_img_path = out_root / "RENDER" / name / f"{i_frame:05d}.jpg"
+        out_img_path = out_root / "RENDER" / name / f"{i_frame:05d}.png"
         out_img_path.parent.mkdir(exist_ok=True, parents=True)
         bpy.ops.render.render()
         bpy.data.images["Render Result"].save_render(filepath=str(out_img_path))
+
+        if len(kps_hist) >= 3:
+            diff1 = np.linalg.norm(kps_hist[-1] - kps_hist[-2])
+            diff2 = np.linalg.norm(kps_hist[-2] - kps_hist[-3])
+            if diff1 < 1e-8 and diff2 < 1e-8:
+                break
 
     done = True
 
 
 fbx_path = None
+motion_path = None
 
 
 def main():
-    global fbx_path, done
+    global fbx_path, motion_path, done
 
     for i, fbx_path in enumerate(mesh_root.glob("*.fbx")):
-        if i >= n_obj:
-            break
-
         print(f"[{i:03d}] {str(fbx_path)}")
 
-        done = False
-
-        bpy.ops.wm.read_homefile(use_empty=True)
-        bpy.app.handlers.load_post.append(load_post_callback)
-        bpy.ops.wm.open_mainfile(filepath=str(mesh_root / "environment.blend"))
+        for j, motion_path in enumerate(motion_root.glob(f"{fbx_path.stem}/*.fbx")):
+            done = False
+            print(f"  ({j:03d}) {str(motion_path)}")
+            bpy.ops.wm.read_homefile(use_empty=True)
+            bpy.app.handlers.load_post.append(load_post_callback)
+            bpy.ops.wm.open_mainfile(filepath=str(mesh_root / "../environment.blend"))
 
 
 main()

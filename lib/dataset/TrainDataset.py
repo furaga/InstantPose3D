@@ -44,10 +44,10 @@ class TrainDataset(Dataset):
         self.aug_trans = transforms.Compose(
             [
                 transforms.ColorJitter(
-                    brightness=0.2,
-                    contrast=0.2,
-                    saturation=0.05,
-                    hue=0.05,
+                    brightness=self.opt.aug_bri,
+                    contrast=self.opt.aug_con,
+                    saturation=self.opt.aug_sat,
+                    hue=self.opt.aug_hue,
                 )
             ]
         )
@@ -116,20 +116,14 @@ class TrainDataset(Dataset):
 
             # if self.is_train:
             # TODo
-            # Pad images
             # random flip
-            # random scale
-            # random translate in the pixel space
-
-            # 色味を変える
-            # render = self.aug_trans(render)
-
-            # # random blur
-            # if self.opt.aug_blur > 0.00001:
-            #     blur = GaussianBlur(np.random.uniform(0, self.opt.aug_blur))
-            #     render = render.filter(blur)
 
             # TODO: BG
+            # 色味を変える
+            render = self.aug_trans(render)
+            if self.opt.aug_blur > 0.00001:
+                blur = GaussianBlur(np.random.uniform(0, self.opt.aug_blur))
+                render = render.filter(blur)
 
             renders.append(self.to_tensor(render))
 

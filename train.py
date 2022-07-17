@@ -34,9 +34,15 @@ def parse_args():
     # データセット・モデル
     parser.add_argument("--dataroot", type=Path, required=True)
     parser.add_argument("--input_size", type=int, default=448)
+    parser.add_argument("--load_size", type=int, default=448)
 
     # TODO: augment系
-    parser.add_argument("--load_size", type=int, default=448)
+    parser.add_argument('--aug_blur', type=float, default=0.01)
+    parser.add_argument('--aug_bri', type=float, default=0.2)
+    parser.add_argument('--aug_con', type=float, default=0.2)
+    parser.add_argument('--aug_gry', type=float, default=0.1)
+    parser.add_argument('--aug_hue', type=float, default=0.05)
+    parser.add_argument('--aug_sat', type=float, default=0.05)
 
     args = parser.parse_args()
     return args

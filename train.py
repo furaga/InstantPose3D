@@ -36,8 +36,6 @@ def parse_args():
     parser.add_argument("--input_size", type=int, default=448)
 
     # TODO: augment系
-
-    parser.add_argument("--frame_num", type=int, default=130)
     parser.add_argument("--load_size", type=int, default=448)
 
     args = parser.parse_args()
@@ -163,14 +161,24 @@ def main():
 
             image_tensor = train_data["img"].to(device=cuda)
 
+            # img_np = np.transpose(image_tensor.detach().cpu().numpy()[0], (1, 2, 0))
+            # img_np = ((0.5 * img_np + 0.5) * 255).astype(np.uint8)
+            # img_np = img_np[:, :, ::-1]
+            # img_np = np.hstack([
+            #     img_np[:, :, 0:3],
+            #     img_np[:, :, 3:6],
+            #     img_np[:, :, 6:9],
+            # ])
+            # cv2.imwrite(f"img-{train_idx}.png", img_np)
+
             since = time.time()
             hm_tensors, offset_tensors = pose3d_net.forward(image_tensor)
             print("forward time: ", time.time() - since)
-            
+
             # check if hm_tensors in [0, 1]
             hm = hm_tensors.detach().cpu().numpy()
 
-            hm_loss = 4 * hm_criterion(hm_tensors, gt_hm_tensor) # gtをあとにしないといけない
+            hm_loss = 4 * hm_criterion(hm_tensors, gt_hm_tensor)  # gtをあとにしないといけない
             weight = gt_hm_tensor[:, :, :, :, :, None].expand_as(gt_offset_tensor)
             of_loss = of_criterion(
                 torch.masked_select(offset_tensors, weight > 0.5),

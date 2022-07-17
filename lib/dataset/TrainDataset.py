@@ -55,7 +55,8 @@ class TrainDataset(Dataset):
     def get_subjects(self):
         all_subjects = os.listdir(self.RENDER)
         subject_frames = {
-            (i, s): len(list((Path(self.RENDER) / s).glob("*.jpg"))) for i, s in enumerate(all_subjects)
+            (i, s): len(list((Path(self.RENDER) / s).glob("*.png"))) - 2
+            for i, s in enumerate(all_subjects)
         }
         subject_frames = {k: n for k, n in subject_frames.items() if n > 3}
         return all_subjects, subject_frames
@@ -110,7 +111,7 @@ class TrainDataset(Dataset):
         renders = []
         for i_frame in range(start_frame, start_frame + 3):
 
-            render_path = os.path.join(self.RENDER, subject, "%05d.jpg" % i_frame)
+            render_path = os.path.join(self.RENDER, subject, "%05d.png" % i_frame)
             render = Image.open(render_path).convert("RGB")
 
             # if self.is_train:
@@ -165,7 +166,7 @@ class TrainDataset(Dataset):
             "i_frame": i_frame,
         }
         subject = self.subjects[subject_id]
-        
+
         render_data = self.get_render(subject, i_frame)
         res.update(render_data)
         return res

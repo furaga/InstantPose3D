@@ -33,16 +33,19 @@ def parse_args():
 
     # データセット・モデル
     parser.add_argument("--dataroot", type=Path, required=True)
+    parser.add_argument(
+        "--bg_root", type=Path, default="D:/workspace/anim/screenshots/background"
+    )
     parser.add_argument("--input_size", type=int, default=448)
     parser.add_argument("--load_size", type=int, default=448)
 
     # TODO: augment系
-    parser.add_argument('--aug_blur', type=float, default=0.01)
-    parser.add_argument('--aug_bri', type=float, default=0.2)
-    parser.add_argument('--aug_con', type=float, default=0.2)
-    parser.add_argument('--aug_gry', type=float, default=0.1)
-    parser.add_argument('--aug_hue', type=float, default=0.05)
-    parser.add_argument('--aug_sat', type=float, default=0.05)
+    parser.add_argument("--aug_blur", type=float, default=0.2)
+    parser.add_argument("--aug_bri", type=float, default=0.2)
+    parser.add_argument("--aug_con", type=float, default=0.2)
+    parser.add_argument("--aug_gry", type=float, default=0.1)
+    parser.add_argument("--aug_hue", type=float, default=0.05)
+    parser.add_argument("--aug_sat", type=float, default=0.05)
 
     args = parser.parse_args()
     return args
@@ -167,15 +170,15 @@ def main():
 
             image_tensor = train_data["img"].to(device=cuda)
 
-            # img_np = np.transpose(image_tensor.detach().cpu().numpy()[0], (1, 2, 0))
-            # img_np = ((0.5 * img_np + 0.5) * 255).astype(np.uint8)
-            # img_np = img_np[:, :, ::-1]
-            # img_np = np.hstack([
-            #     img_np[:, :, 0:3],
-            #     img_np[:, :, 3:6],
-            #     img_np[:, :, 6:9],
-            # ])
-            # cv2.imwrite(f"img-{train_idx}.png", img_np)
+            img_np = np.transpose(image_tensor.detach().cpu().numpy()[0], (1, 2, 0))
+            img_np = ((0.5 * img_np + 0.5) * 255).astype(np.uint8)
+            img_np = img_np[:, :, ::-1]
+            img_np = np.hstack([
+                img_np[:, :, 0:3],
+                img_np[:, :, 3:6],
+                img_np[:, :, 6:9],
+            ])
+            cv2.imwrite(f"img-{train_idx}.png", img_np)
 
             since = time.time()
             hm_tensors, offset_tensors = pose3d_net.forward(image_tensor)

@@ -52,6 +52,10 @@ class TrainDataset(Dataset):
             ]
         )
 
+        # BG Images
+        self.all_bg_paths = [p for p in Path(self.opt.bg_root).glob("*.jpg")]
+        print(f"{len(self.all_bg_paths)} background images were found.")
+
     def get_subjects(self):
         all_subjects = os.listdir(self.RENDER)
         subject_frames = {
@@ -106,19 +110,32 @@ class TrainDataset(Dataset):
 
         return hm, offset
 
+    def aug_bg(self, render: Image, mask: Image, bg_path: Path):
+        if len(self.all_bg_paths) <= 0:
+            return render
+
+        bg = Image.open(str(bg_path)).convert("RGB")
+        bg = bg.resize(render.size)
+        bg.paste(render, (0, 0), mask)
+
+        return bg
+
     def get_render(self, subject, start_frame):
         # The ids are an even distribution of num_views around view_id
         renders = []
+        bg_path = self.all_bg_paths[random.randint(0, len(self.all_bg_paths) - 1)]
         for i_frame in range(start_frame, start_frame + 3):
 
             render_path = os.path.join(self.RENDER, subject, "%05d.png" % i_frame)
-            render = Image.open(render_path).convert("RGB")
+            render_raw = Image.open(render_path)
+            render = render_raw.convert("RGB")
+            mask = render_raw.split()[-1]
 
-            # if self.is_train:
-            # TODo
-            # random flip
+            # TODO: random flip
 
-            # TODO: BG
+            # BG
+            render = self.aug_bg(render, mask, bg_path)
+
             # 色味を変える
             render = self.aug_trans(render)
             if self.opt.aug_blur > 0.00001:

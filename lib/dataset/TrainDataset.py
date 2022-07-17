@@ -27,9 +27,9 @@ class TrainDataset(Dataset):
         self.PARAMS = os.path.join(self.root, "PARAMS")
         self.is_train = phase == "train"
         self.input_size = self.opt.input_size
-        self.subjects = self.get_subjects()
-        self.frame_num = self.opt.frame_num
-        self.frame_list = list(range(self.frame_num - 2))
+        self.subjects, self.subject_frames = self.get_subjects()
+        self.n_data = int(np.sum([v for _, v in self.subject_frames.items()]))
+        assert self.n_data > 0, "No data found"
 
         # PIL to tensor
         self.to_tensor = transforms.Compose(
@@ -54,10 +54,14 @@ class TrainDataset(Dataset):
 
     def get_subjects(self):
         all_subjects = os.listdir(self.RENDER)
-        return all_subjects
+        subject_frames = {
+            (i, s): len(list((Path(self.RENDER) / s).glob("*.jpg"))) for i, s in enumerate(all_subjects)
+        }
+        subject_frames = {k: n for k, n in subject_frames.items() if n > 3}
+        return all_subjects, subject_frames
 
     def __len__(self):
-        return len(self.subjects) * (self.frame_num - 2)
+        return self.n_data
 
     def load_heat_maps(self, param_path):
         n_grid = 28
@@ -89,7 +93,7 @@ class TrainDataset(Dataset):
                                 dz = z - (i + 0.5)
                                 dy = y - (j + 0.5)
                                 dx = x - (k + 0.5)
-                                dist = np.sqrt(dx ** 2 + dy ** 2 + dz ** 2)
+                                dist = np.sqrt(dx**2 + dy**2 + dz**2)
 
                                 hm[i_kp, i, j, k] = 1 if dist <= R else 0
                                 offset[i_kp, i, j, k, 0] = dz
@@ -124,6 +128,8 @@ class TrainDataset(Dataset):
             #     blur = GaussianBlur(np.random.uniform(0, self.opt.aug_blur))
             #     render = render.filter(blur)
 
+            # TODO: BG
+
             renders.append(self.to_tensor(render))
 
         # list of (3x448x448) -> 9 x 448 x 448
@@ -146,13 +152,20 @@ class TrainDataset(Dataset):
         }
 
     def get_item(self, index):
-        subject_id = index // (self.frame_num - 2)
-        i_frame = index % (self.frame_num - 2)
-        subject = self.subjects[subject_id]
+        sum = 0
+        for (i, _), n in self.subject_frames.items():
+            sum += n
+            if sum > index:
+                subject_id = i
+                i_frame = index - (sum - n)
+                break
+
         res = {
             "subject_id": subject_id,
             "i_frame": i_frame,
         }
+        subject = self.subjects[subject_id]
+        
         render_data = self.get_render(subject, i_frame)
         res.update(render_data)
         return res

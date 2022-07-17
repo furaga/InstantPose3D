@@ -110,7 +110,7 @@ def save_param(param_path, params):
 
 def main(args):
     # glob and convert to list
-    all_img_paths = list(args.root_dir.glob("RENDER/*/*.jpg"))
+    all_img_paths = list(args.root_dir.glob("RENDER/*/*.png"))
     
     bbox = np.array([np.inf, np.inf, np.inf]), np.array([-np.inf, -np.inf, -np.inf])
 

@@ -9,7 +9,7 @@ from mathutils import Matrix
 # https://www.mixamo.com/
 mesh_root = Path(r"D:\workspace\InstantPose3D\avatars\mixamo\characters")
 motion_root = Path(r"D:\workspace\InstantPose3D\avatars\mixamo\motions")
-out_root = Path(r"D:\workspace\InstantPose3D\train_mini2")
+out_root = Path(r"D:\workspace\InstantPose3D\train")
 
 done = False
 
@@ -109,10 +109,70 @@ def get_children(parent):
 def join_meshes(meshes):
     bpy.ops.object.select_all(action="DESELECT")
     bpy.context.view_layer.objects.active = meshes[0]
-    for mesh in meshes:
-        mesh.select_set(True)
-    bpy.ops.object.join()
+    if len(meshes) >= 2:
+        for mesh in meshes:
+            mesh.select_set(True)
+        bpy.ops.object.join()
     return meshes[0]
+
+
+def setup_materials():
+    for mat in bpy.data.materials:
+        mat.use_nodes = True
+        node_tree = mat.node_tree
+        principled = node_tree.nodes["Principled BSDF"]
+
+        to_remove = []
+        for l in node_tree.links:
+            if l.to_socket == principled.inputs["Metallic"]:
+                to_remove.append(l)
+            if l.to_socket == principled.inputs["Specular"]:
+                to_remove.append(l)
+            if l.to_socket == principled.inputs["Roughness"]:
+                to_remove.append(l)
+            if l.to_socket == principled.inputs["Alpha"]:
+                to_remove.append(l)
+
+        for l in to_remove:
+            node_tree.links.remove(l)
+
+        principled.inputs["Metallic"].default_value = 0
+        principled.inputs["Specular"].default_value = 0.1
+        principled.inputs["Roughness"].default_value = 0.5
+        principled.inputs["Alpha"].default_value = 1
+
+
+def look_at(camera, target):
+    ray = np.subtract(target, camera.location)
+    ray_xy = np.array([ray[0], ray[1], 0])
+    x = np.array([-ray[2], +0, ray[1]])
+    y = np.array([np.linalg.norm(ray_xy), 0, -ray[0]])
+    camera.rotation_euler = np.arctan2(y, x)
+
+
+def move_camera():
+    import random
+
+    camera = bpy.data.objects["Camera"]
+
+    r = 7.0
+
+    # 20 ~ 100
+    min_theta = np.pi * 20 / 180
+    max_theta = np.pi * 100 / 180
+    t = random.random()
+    theta = min_theta * (1 - t) + max_theta * t
+    phi = random.random() * 2 * np.pi
+    camera_position = [
+        r * np.sin(theta) * np.cos(phi),
+        r * np.sin(theta) * np.sin(phi),
+        r * np.cos(theta),
+    ]
+    target = [0, 0, 1]
+    camera = bpy.data.objects["Camera"]
+    camera.location = camera_position
+
+    look_at(camera, target)
 
 
 @persistent
@@ -123,10 +183,13 @@ def load_post_callback(dummy):
     bpy.app.handlers.load_post.remove(load_post_callback)
 
     # アニメーションをリターゲット
-    bpy.context.view_layer.objects.active = bpy.data.objects["Armature"]
-    bpy.context.scene.mix_source_armature = bpy.data.objects["Armature.001"]
-    bpy.ops.mr.make_rig()
-    bpy.ops.mr.import_anim_to_rig()
+    try:
+        bpy.context.view_layer.objects.active = bpy.data.objects["Armature"]
+        bpy.context.scene.mix_source_armature = bpy.data.objects["Armature.001"]
+        bpy.ops.mr.make_rig()
+        bpy.ops.mr.import_anim_to_rig()
+    except Exception as e:
+        print(e)
 
     for scene in bpy.data.scenes:
         scene.render.engine = "CYCLES"
@@ -152,6 +215,11 @@ def load_post_callback(dummy):
     # モデルのサイズを同じくらいに調整
     bpy.context.scene.frame_set(0)
     resize_height(amt, mesh, 1.6)
+
+    setup_materials()
+    
+    # カメラランダム移動
+    move_camera()
 
     # JPEG
     # bpy.context.scene.render.image_settings.file_format = "JPEG"

@@ -10,9 +10,12 @@ target_bone_names = [
     "Hips",
     "Spine",
     "Neck",
-    "Head",
+    "Head", 
+    # "Nose"
     #    "RightEye",
     #   "LeftEye",
+    #    "RightEar",
+    #   "LeftEar",
     "LeftShoulder",
     "LeftArm",
     "LeftForeArm",

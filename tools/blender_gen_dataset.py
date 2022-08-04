@@ -178,6 +178,12 @@ def move_camera():
 @persistent
 def load_post_callback(dummy):
     global done
+    name = fbx_path.stem + "_" + motion_path.stem
+
+    if (out_root / "PARAMS_RAW" / name).exists():
+        print("Already processed")
+        return
+
     bpy.ops.import_scene.fbx(filepath=str(fbx_path))
     bpy.ops.import_scene.fbx(filepath=str(motion_path))
     bpy.app.handlers.load_post.remove(load_post_callback)
@@ -201,7 +207,6 @@ def load_post_callback(dummy):
         scene.render.resolution_percentage = 100
         scene.cycles.progressive = "BRANCHED_PATH"
 
-    name = fbx_path.stem + "_" + motion_path.stem
     amt = bpy.data.objects["Armature"]
 
     # join meshes
@@ -217,7 +222,7 @@ def load_post_callback(dummy):
     resize_height(amt, mesh, 1.6)
 
     setup_materials()
-    
+
     # カメラランダム移動
     move_camera()
 

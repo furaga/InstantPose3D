@@ -70,6 +70,8 @@ def load_param(param_path):
                 pose = np.zeros((3, 4), float)
                 pose[:3, :3] = R
                 pose[:3, 3] = p.ravel()
+                print("pose", pose)
+#                pose[:3, 3] = [0, 0, 7] #p.ravel()
 
                 bone_name = tokens[0]
                 if ':' in bone_name:
@@ -79,7 +81,8 @@ def load_param(param_path):
                 pt = np.array([float(t) for t in tokens[2 : 3 + 3]])
                 for ti, target in enumerate(target_bone_names):
                     if target == bone_name and head_tail == "head":
-                        params[target] = (pt, pose, mtx)
+                        if target not in params:
+                            params[target] = (pt, pose, mtx)
 
     # check if params is len(target_bone_names)
     assert len(params) == len(target_bone_names), str(param_path)
@@ -113,23 +116,36 @@ def save_param(param_path, params):
 
 def main(args):
     # glob and convert to list
+#    all_img_paths = list(args.root_dir.glob("RENDER/Ch12_nonPBR*/*.png"))
     all_img_paths = list(args.root_dir.glob("RENDER/*/*.png"))
     
     bbox = np.array([np.inf, np.inf, np.inf]), np.array([-np.inf, -np.inf, -np.inf])
+    
+    prev_out = None
 
     for i, img_path in enumerate(all_img_paths):
         sub_name = img_path.parent.name
         param_path = args.root_dir / "PARAMS_RAW" / sub_name / (img_path.stem + ".txt")
         params = load_param(param_path)
         new_params = convert_param(params)
+
+        # any_outside = False        
+        # for key, kp in new_params.items():
+        #     if kp[3] < 0 or 448 <= kp[3] or kp[4] < 0 or 448 <= kp[4]:
+        #         any_outside = True
+        #         if any_outside and prev_out != img_path.parent:
+        #             prev_out = img_path.parent
+        #             print(f"{str(img_path)} is outside, key=", key)
+        #         break
+        print(img_path)
+        render = visualize_keypoint(cv2.imread(str(img_path)), new_params)
+        cv2.imshow("render", render)
+        cv2.waitKey(0)
+                
         
-        #render = visualize_keypoint(cv2.imread(str(img_path)), new_params)
-        #cv2.imshow("render", render)
-        #cv2.waitKey(0)
-        
-        out_param_path = args.root_dir / "PARAMS" / sub_name / (img_path.stem + ".txt")
-        out_param_path.parent.mkdir(parents=True, exist_ok=True)
-        save_param(out_param_path, new_params)
+        # out_param_path = args.root_dir / "PARAMS" / sub_name / (img_path.stem + ".txt")
+        # out_param_path.parent.mkdir(parents=True, exist_ok=True)
+        # save_param(out_param_path, new_params)
         
         for _, kp in new_params.items():
             bbox = np.minimum(bbox[0], kp[:3]), np.maximum(bbox[1], kp[:3])

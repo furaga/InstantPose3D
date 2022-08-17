@@ -287,7 +287,8 @@ def main():
 
     for i, fbx_path in enumerate(mesh_root.glob("*.fbx")):
         print(f"[{i:03d}] {str(fbx_path)}")
-
+        if "Ch18" not in str(fbx_path):
+            continue
         for j, motion_path in enumerate(motion_root.glob(f"{fbx_path.stem}/*.fbx")):
             done = False
             print(f"  ({j:03d}) {str(motion_path)}")

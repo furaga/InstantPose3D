@@ -177,9 +177,9 @@ def main(args):
                 
         # 二個ミスなら許容
         if n_ok >= len(target_bone_names) - 2:
-            # out_param_path = args.root_dir / "PARAMS" / sub_name / (img_path.stem + ".txt")
-            # out_param_path.parent.mkdir(parents=True, exist_ok=True)
-            # save_param(out_param_path, new_params)
+            out_param_path = args.root_dir / "PARAMS" / sub_name / (img_path.stem + ".txt")
+            out_param_path.parent.mkdir(parents=True, exist_ok=True)
+            save_param(out_param_path, new_params)
             
             for _, kp in new_params.items():
                 bbox = np.minimum(bbox[0], kp[:3]), np.maximum(bbox[1], kp[:3])
@@ -187,9 +187,9 @@ def main(args):
             latest_ng = img_path.parent
             print(f"{str(img_path)} has out-of-range keypoints. Skip the remaining images.")
             
-            render = visualize_keypoint(cv2.imread(str(img_path)), new_params)
-            cv2.imshow("render", render)
-            cv2.waitKey(0)
+            # render = visualize_keypoint(cv2.imread(str(img_path)), new_params)
+            # cv2.imshow("render", render)
+            # cv2.waitKey(0)
         
 
     print(bbox)

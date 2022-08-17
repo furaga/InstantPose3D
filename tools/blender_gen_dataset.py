@@ -16,7 +16,7 @@ done = False
 num_frame = 5000
 
 
-def get_intrinsic(scene, camdata, mode="complete"):
+def get_intrinsic(scene, camdata, mode="simple"):
     scale = scene.render.resolution_percentage / 100
     width = scene.render.resolution_x * scale  # px
     height = scene.render.resolution_y * scale  # px

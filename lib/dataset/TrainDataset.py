@@ -57,9 +57,9 @@ class TrainDataset(Dataset):
         print(f"{len(self.all_bg_paths)} background images were found.")
 
     def get_subjects(self):
-        all_subjects = os.listdir(self.RENDER)
+        all_subjects = os.listdir(self.PARAMS)
         subject_frames = {
-            (i, s): len(list((Path(self.RENDER) / s).glob("*.png"))) - 2
+            (i, s): len(list((Path(self.PARAMS) / s).glob("*.txt"))) - 2
             for i, s in enumerate(all_subjects)
         }
         subject_frames = {k: n for k, n in subject_frames.items() if n > 3}
@@ -77,7 +77,8 @@ class TrainDataset(Dataset):
 
         i_kp = 0
 
-        bbox = np.array([-1.3, 0, 4.3]), np.array([1.3, 2, 7.5])
+        # (array([-2.22276672, -2.19848655,  3.7257984 ]), array([ 2.27004362,  1.71136281, 10.32756804]))
+        bbox = np.array([-2.3, -2.3, 3.5]), np.array([2.3, 2.3, 10.5])
 
         R = 4
         with open(param_path) as f:
